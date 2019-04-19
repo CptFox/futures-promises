@@ -1,0 +1,1 @@
+{"rustc":12964410163570521870,"features":"[]","target":6515792218483276864,"profile":14891217944882224483,"path":10872709659218687626,"deps":[["futures v0.1.26","futures",11649767888715905839]],"local":[{"MtimeBased":[[1555714415,865382000],".fingerprint/tokio-simplified-cfec680562ca61dd/dep-lib-tokio_simplified-cfec680562ca61dd"]}],"rustflags":[],"edition":"Edition2018"}
