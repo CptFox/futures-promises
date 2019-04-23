@@ -138,6 +138,7 @@ pub mod promises {
     }
 
     /// The "sender" side of a Promise
+    #[derive(Clone)]
     pub struct Promise<T> {
         content: Arc<Mutex<Cell<Option<T>>>>,
         state: Arc<Mutex<PromiseState>>,
