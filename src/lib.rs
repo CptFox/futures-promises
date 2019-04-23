@@ -25,6 +25,14 @@ pub mod watched_variables {
         content: Arc<Mutex<(T, StreamState)>>,
     }
 
+    impl<T> VariableWatcher<T> {
+        /// Triggers a new poll without changes to the watched variable
+        pub fn trigger(&self) {
+            (*self.content.lock().unwrap()).1 = StreamState::Ready;
+            self.task.notify();
+        }
+    }
+
     impl<T> Stream for VariableWatcher<T>
     where
         T: Clone,
