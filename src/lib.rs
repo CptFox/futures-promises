@@ -25,14 +25,6 @@ pub mod watched_variables {
         content: Arc<Mutex<(T, StreamState)>>,
     }
 
-    impl<T> VariableWatcher<T> {
-        /// Triggers a new poll without changes to the watched variable
-        pub fn trigger(&self) {
-            (*self.content.lock().unwrap()).1 = StreamState::Ready;
-            self.task.notify();
-        }
-    }
-
     impl<T> Stream for VariableWatcher<T>
     where
         T: Clone,
@@ -80,12 +72,19 @@ pub mod watched_variables {
             }
         }
 
-        /// Similar to Mutex::lock()
+        /// Similar to Mutex::lock(), but the provided Accessor will trigger a `poll`
+        /// upon `drop`, which will resolve to Ready if the accessor was accessed mutably.
         pub fn lock(&self) -> WatchedVariableAccessor<T> {
             WatchedVariableAccessor {
                 task: self.task.clone(),
                 content: self.content.lock().unwrap(),
             }
+        }
+
+        /// Allows to force ready upon the watcher.
+        pub fn force_ready(&self) {
+            self.content.lock().unwrap().1 = StreamState::Ready;
+            self.task.notify();
         }
     }
 
@@ -132,7 +131,6 @@ pub mod promises {
     use futures::task::AtomicTask;
     use futures::{Async, Future, Poll};
 
-    #[derive(Clone)]
     enum PromiseState {
         NotReady,
         Resolved,
@@ -140,7 +138,6 @@ pub mod promises {
     }
 
     /// The "sender" side of a Promise
-    #[derive(Clone)]
     pub struct Promise<T> {
         content: Arc<Mutex<Cell<Option<T>>>>,
         state: Arc<Mutex<PromiseState>>,
