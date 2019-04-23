@@ -12,7 +12,7 @@ pub mod watched_variables {
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
-    enum StreamState {
+    pub enum StreamState {
         NotReady,
         Ready,
         Closed,
@@ -25,11 +25,8 @@ pub mod watched_variables {
         content: Arc<Mutex<(T, StreamState)>>,
     }
 
-    impl<T> Stream for VariableWatcher<T>
-    where
-        T: Clone,
-    {
-        type Item = T;
+    impl<T> Stream for VariableWatcher<T> {
+        type Item = Arc<Mutex<(T, StreamState)>>;
         type Error = Infallible;
         fn poll(&mut self) -> Poll<Option<<Self as Stream>::Item>, <Self as Stream>::Error> {
             let mut guard = self.content.lock().unwrap();
@@ -41,7 +38,7 @@ pub mod watched_variables {
                 StreamState::Closed => Ok(Async::Ready(None)),
                 StreamState::Ready => {
                     (*guard).1 = StreamState::NotReady;
-                    Ok(Async::Ready(Some(guard.0.clone())))
+                    Ok(Async::Ready(Some(self.content.clone())))
                 }
             }
         }
