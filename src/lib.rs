@@ -118,12 +118,13 @@ pub mod watched_variables {
 
 /// A futures implementation of JS-like Promises.
 pub mod promises {
-    use std::sync::{Arc, Mutex};
     use std::cell::Cell;
+    use std::sync::{Arc, Mutex};
 
-    use futures::{Async, Future, Poll};
     use futures::task::AtomicTask;
+    use futures::{Async, Future, Poll};
 
+    #[derive(Clone)]
     enum PromiseState {
         NotReady,
         Resolved,
@@ -131,6 +132,7 @@ pub mod promises {
     }
 
     /// The "sender" side of a Promise
+    #[derive(Clone)]
     pub struct Promise<T> {
         content: Arc<Mutex<Cell<Option<T>>>>,
         state: Arc<Mutex<PromiseState>>,
