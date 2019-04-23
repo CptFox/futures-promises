@@ -128,6 +128,7 @@ pub mod promises {
     use futures::task::AtomicTask;
     use futures::{Async, Future, Poll};
 
+    #[derive(Clone)]
     enum PromiseState {
         NotReady,
         Resolved,
@@ -152,14 +153,30 @@ pub mod promises {
         }
 
         pub fn resolve(&self, value: T) {
-            self.content.lock().unwrap().set(Some(value));
-            *self.state.lock().unwrap() = PromiseState::Resolved;
-            self.task.notify();
+            let mut guard = self.state.lock().unwrap();
+            match (*guard).clone() {
+                PromiseState::NotReady => {
+                    self.content.lock().unwrap().set(Some(value));
+                    *guard = PromiseState::Resolved;
+                    self.task.notify();
+                }
+                _ => {
+                    panic!("Attempt to resolve an already finished promise");
+                }
+            }
         }
 
         pub fn reject(&self, message: String) {
-            *self.state.lock().unwrap() = PromiseState::Rejected(message);
-            self.task.notify();
+            let mut guard = self.state.lock().unwrap();
+            match (*guard).clone() {
+                PromiseState::NotReady => {
+                    *guard = PromiseState::Rejected(message);
+                    self.task.notify();
+                }
+                _ => {
+                    panic!("Attempt to reject an already finished promise");
+                }
+            }
         }
 
         pub fn get_handle(&self) -> PromiseHandle<T> {
@@ -173,8 +190,14 @@ pub mod promises {
 
     impl<T> Drop for Promise<T> {
         fn drop(&mut self) {
-            *self.state.lock().unwrap() = PromiseState::Rejected("Promise Dropped".into());
-            self.task.notify();
+            let mut guard = self.state.lock().unwrap();
+            match (*guard).clone() {
+                PromiseState::NotReady => {
+                    *guard = PromiseState::Rejected("Promise Dropped".into());
+                    self.task.notify();
+                }
+                _ => {}
+            }
         }
     }
 
