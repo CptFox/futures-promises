@@ -20,21 +20,22 @@ pub mod watched_variables {
 
     /// This `futures::Stream` implementation will be notified whenever a `WatchedVariableAccessor` is dropped
     /// If the accessor was mutably derefenced, then a clone of the value after dropping will be sent upon polling
+    ///
+    /// It implements Stream, where each frame will be a clone of its content (an Arc on the variable)
+    #[derive(Clone)]
     pub struct VariableWatcher<T> {
-        task: Arc<AtomicTask>,
-        content: Arc<Mutex<(T, StreamState)>>,
+        pub task: Arc<AtomicTask>,
+        pub content: Arc<Mutex<(T, StreamState)>>,
     }
 
     impl<T> Stream for VariableWatcher<T> {
         type Item = Arc<Mutex<(T, StreamState)>>;
         type Error = Infallible;
         fn poll(&mut self) -> Poll<Option<<Self as Stream>::Item>, <Self as Stream>::Error> {
+            self.task.register();
             let mut guard = self.content.lock().unwrap();
             match (guard.1).clone() {
-                StreamState::NotReady => {
-                    self.task.register();
-                    Ok(Async::NotReady)
-                }
+                StreamState::NotReady => Ok(Async::NotReady),
                 StreamState::Closed => Ok(Async::Ready(None)),
                 StreamState::Ready => {
                     (*guard).1 = StreamState::NotReady;
@@ -46,10 +47,23 @@ pub mod watched_variables {
 
     /// A watched variable. Behaves similarly to a mutex, except that watchers obtained from its
     /// `get_watcher()` method will be notified upon mutable dereferencing.
-    #[derive(Clone)]
     pub struct WatchedVariable<T> {
         task: Arc<AtomicTask>,
         content: Arc<Mutex<(T, StreamState)>>,
+        counter: Arc<Mutex<u32>>,
+    }
+
+    impl<T> Clone for WatchedVariable<T> {
+        fn clone(&self) -> Self {
+            {
+                *self.counter.lock().unwrap() += 1;
+            }
+            WatchedVariable {
+                task: self.task.clone(),
+                content: self.content.clone(),
+                counter: self.counter.clone(),
+            }
+        }
     }
 
     impl<T> WatchedVariable<T> {
@@ -59,6 +73,7 @@ pub mod watched_variables {
             WatchedVariable {
                 task: Arc::new(AtomicTask::new()),
                 content: Arc::new(Mutex::new((value, StreamState::Ready))),
+                counter: Arc::new(Mutex::new(1)),
             }
         }
 
@@ -87,9 +102,13 @@ pub mod watched_variables {
 
     impl<T> Drop for WatchedVariable<T> {
         fn drop(&mut self) {
-            let mut guard = self.content.lock().unwrap();
-            guard.1 = StreamState::Closed;
-            self.task.notify();
+            let mut guard = self.counter.lock().unwrap();
+            *guard -= 1;
+            if *guard <= 0 {
+                let mut guard = self.content.lock().unwrap();
+                guard.1 = StreamState::Closed;
+                self.task.notify();
+            }
         }
     }
 
@@ -136,7 +155,6 @@ pub mod promises {
     }
 
     /// The "sender" side of a Promise
-    #[derive(Clone)]
     pub struct Promise<T> {
         content: Arc<Mutex<Cell<Option<T>>>>,
         state: Arc<Mutex<PromiseState>>,
@@ -202,6 +220,7 @@ pub mod promises {
     }
 
     /// The "receiver": a `Future` used to watch a `Promise`
+    #[derive(Clone)]
     pub struct PromiseHandle<T> {
         content: Arc<Mutex<Cell<Option<T>>>>,
         state: Arc<Mutex<PromiseState>>,

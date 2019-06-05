@@ -1,6 +1,6 @@
 [package]
 name = "futures-promises"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Pierre Avital <pierre.avital+gitlab@gmail.com>"]
 edition = "2018"
 description = "Promises and Watched Variables for Futures"
@@ -9,4 +9,4 @@ readme = "README.md"
 repository = "https://github.com/CptFox/futures-promises"
 
 [dependencies]
-futures = "0.1.26"
+futures = "0.1.27"
