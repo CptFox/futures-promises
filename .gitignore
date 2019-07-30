@@ -1,2 +1,1 @@
-target/rls/.rustc_info.json
-target/**
+/target/**

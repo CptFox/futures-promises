@@ -22,10 +22,18 @@ pub mod watched_variables {
     /// If the accessor was mutably derefenced, then a clone of the value after dropping will be sent upon polling
     ///
     /// It implements Stream, where each frame will be a clone of its content (an Arc on the variable)
-    #[derive(Clone)]
     pub struct VariableWatcher<T> {
         pub task: Arc<AtomicTask>,
         pub content: Arc<Mutex<(T, StreamState)>>,
+    }
+
+    impl<T> Clone for VariableWatcher<T> {
+        fn clone(&self) -> Self {
+            VariableWatcher {
+                task: self.task.clone(),
+                content: self.content.clone(),
+            }
+        }
     }
 
     impl<T> Stream for VariableWatcher<T> {
