@@ -14,7 +14,7 @@ pub mod watched_variables {
     #[derive(Clone)]
     pub enum StreamState {
         NotReady,
-        Ready,
+        Ready(usize),
         Closed,
     }
 
@@ -42,11 +42,14 @@ pub mod watched_variables {
         fn poll(&mut self) -> Poll<Option<<Self as Stream>::Item>, <Self as Stream>::Error> {
             self.task.register();
             let mut guard = self.content.lock().unwrap();
-            match (guard.1).clone() {
+            match (&mut guard.1) {
                 StreamState::NotReady => Ok(Async::NotReady),
                 StreamState::Closed => Ok(Async::Ready(None)),
-                StreamState::Ready => {
-                    (*guard).1 = StreamState::NotReady;
+                StreamState::Ready(count) => {
+                    *count -= 1;
+                    if *count <= 0 {
+                        (*guard).1 = StreamState::NotReady;
+                    }
                     Ok(Async::Ready(Some(self.content.clone())))
                 }
             }
@@ -80,7 +83,7 @@ pub mod watched_variables {
         pub fn from(value: T) -> WatchedVariable<T> {
             WatchedVariable {
                 task: Arc::new(AtomicTask::new()),
-                content: Arc::new(Mutex::new((value, StreamState::Ready))),
+                content: Arc::new(Mutex::new((value, StreamState::Ready(1)))),
                 counter: Arc::new(Mutex::new(1)),
             }
         }
@@ -103,7 +106,13 @@ pub mod watched_variables {
 
         /// Allows to force ready upon the watcher.
         pub fn force_ready(&self) {
-            self.content.lock().unwrap().1 = StreamState::Ready;
+            let mut guard = self.content.lock().unwrap();
+            match &mut guard.1 {
+                StreamState::Ready(count) => {
+                    *count += 1;
+                }
+                _ => guard.1 = StreamState::Ready(1),
+            }
             self.task.notify();
         }
     }
@@ -141,7 +150,10 @@ pub mod watched_variables {
 
     impl<'a, T> DerefMut for WatchedVariableAccessor<'a, T> {
         fn deref_mut(&mut self) -> &mut <Self as Deref>::Target {
-            self.content.1 = StreamState::Ready;
+            match &mut self.content.1 {
+                StreamState::Ready(count) => *count += 1,
+                _ => self.content.1 = StreamState::Ready(1),
+            };
             return &mut self.content.0;
         }
     }
