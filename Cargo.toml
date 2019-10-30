@@ -1,6 +1,6 @@
 [package]
 name = "futures-promises"
-version = "0.1.10"
+version = "0.1.11"
 authors = ["Pierre Avital <pierre.avital+gitlab@gmail.com>"]
 edition = "2018"
 description = "Promises and Watched Variables for Futures"

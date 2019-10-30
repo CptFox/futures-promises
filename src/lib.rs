@@ -10,8 +10,9 @@ pub mod watched_variables {
     use std::ops::DerefMut;
     use std::sync::MutexGuard;
     use std::sync::{Arc, Mutex};
+    use std::sync::atomic::{AtomicU32, Ordering};
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     pub enum StreamState {
         NotReady,
         Ready(usize),
@@ -25,6 +26,15 @@ pub mod watched_variables {
     pub struct VariableWatcher<T> {
         pub task: Arc<AtomicTask>,
         pub content: Arc<Mutex<(T, StreamState)>>,
+    }
+
+    impl<T> std::fmt::Debug for VariableWatcher<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            match self.content.lock() {
+                Ok(guard) => write!(f, "VariableWatcher {{{:?}}}", &guard.1),
+                Err(e) => write!(f, "VariableWatcher(Poisonned) {{{:?}}}", e.get_ref().1),
+            }
+        }
     }
 
     impl<T> Clone for VariableWatcher<T> {
@@ -61,14 +71,12 @@ pub mod watched_variables {
     pub struct WatchedVariable<T> {
         task: Arc<AtomicTask>,
         content: Arc<Mutex<(T, StreamState)>>,
-        counter: Arc<Mutex<u32>>,
+        counter: Arc<std::sync::atomic::AtomicU32>,
     }
 
     impl<T> Clone for WatchedVariable<T> {
         fn clone(&self) -> Self {
-            {
-                *self.counter.lock().unwrap() += 1;
-            }
+            self.counter.fetch_add(1, Ordering::Relaxed);
             WatchedVariable {
                 task: self.task.clone(),
                 content: self.content.clone(),
@@ -84,7 +92,7 @@ pub mod watched_variables {
             WatchedVariable {
                 task: Arc::new(AtomicTask::new()),
                 content: Arc::new(Mutex::new((value, StreamState::Ready(1)))),
-                counter: Arc::new(Mutex::new(1)),
+                counter: Arc::new(AtomicU32::new(1)),
             }
         }
 
@@ -119,9 +127,8 @@ pub mod watched_variables {
 
     impl<T> Drop for WatchedVariable<T> {
         fn drop(&mut self) {
-            let mut guard = self.counter.lock().unwrap();
-            *guard -= 1;
-            if *guard <= 0 {
+            let rc = self.counter.fetch_sub(1, Ordering::Relaxed);
+            if rc <= 1 {
                 let mut guard = self.content.lock().unwrap();
                 guard.1 = StreamState::Closed;
                 self.task.notify();
